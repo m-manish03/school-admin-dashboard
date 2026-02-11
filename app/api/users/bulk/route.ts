@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { schoolAuth, schoolDb } from "@/lib/firebase-admin";
 
 const SCHOOL_CODE = "GRA"; // Use env var in production
 
@@ -52,8 +52,10 @@ async function processUser(user: any) {
 
         // Check if user already exists in Auth to avoid error
         try {
-            await adminAuth!.getUserByEmail(finalEmail);
-            return { success: false, error: `User with email ${finalEmail} already exists`, user };
+            if (schoolAuth) {
+                await schoolAuth.getUserByEmail(finalEmail);
+                return { success: false, error: `User with email ${finalEmail} already exists`, user };
+            }
         } catch (error: any) {
             if (error.code !== 'auth/user-not-found') {
                 throw error;
@@ -62,7 +64,9 @@ async function processUser(user: any) {
         }
 
         // Create Auth User
-        const userRecord = await adminAuth!.createUser({
+        if (!schoolAuth) throw new Error("School Auth not initialized");
+
+        const userRecord = await schoolAuth.createUser({
             email: finalEmail,
             password: password,
             displayName: name,
@@ -88,7 +92,8 @@ async function processUser(user: any) {
             userData.subject = subject;
         }
 
-        await adminDb!.collection("users").doc(userRecord.uid).set(userData);
+        if (!schoolDb) throw new Error("School DB not initialized");
+        await schoolDb.collection("users").doc(userRecord.uid).set(userData);
 
         return {
             success: true,
@@ -102,9 +107,9 @@ async function processUser(user: any) {
 
 export async function POST(request: Request) {
     try {
-        if (!adminAuth || !adminDb) {
+        if (!schoolAuth || !schoolDb) {
             return NextResponse.json(
-                { error: "Firebase Admin not initialized." },
+                { error: "School App Admin not initialized." },
                 { status: 500 }
             );
         }

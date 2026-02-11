@@ -1,17 +1,17 @@
 import { NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebase-admin";
+import { schoolAuth, schoolDb } from "@/lib/firebase-admin";
 
 // Hardcoded for now, could be dynamic or from env
 const SCHOOL_CODE = "GRA";
 
 export async function POST(request: Request) {
-    console.log("API: /api/users/create called");
+    console.log("API: /api/users/create called (Dual Project Mode)");
     try {
         // Check if initialized
-        if (!adminAuth || !adminDb) {
-            console.error("API Error: Firebase Admin not initialized");
+        if (!schoolAuth || !schoolDb) {
+            console.error("API Error: School App Admin not initialized");
             return NextResponse.json(
-                { error: "Firebase Admin not initialized. Check server logs." },
+                { error: "School App Admin not initialized. Check server logs." },
                 { status: 500 }
             );
         }
@@ -69,16 +69,16 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Invalid role" }, { status: 400 });
         }
 
-        // 1. Create user in Firebase Auth
-        console.log(`API: Creating user in Auth: ${finalEmail}`);
-        const userRecord = await adminAuth.createUser({
+        // 1. Create user in Firebase Auth (Project B)
+        console.log(`API: Creating user in School App Auth: ${finalEmail}`);
+        const userRecord = await schoolAuth.createUser({
             email: finalEmail,
             password: password,
             displayName: name,
         });
         console.log(`API: Auth user created: ${userRecord.uid}`);
 
-        // 2. Create user document in 'users' collection
+        // 2. Create user document in 'users' collection (Project B)
         // Using set with merge to be safe, though create is fine for new
         const userData: any = {
             role,
@@ -102,8 +102,8 @@ export async function POST(request: Request) {
             userData.subject = subject;
         }
 
-        console.log(`API: Writing to Firestore users/${userRecord.uid}`);
-        await adminDb.collection("users").doc(userRecord.uid).set(userData);
+        console.log(`API: Writing to School App Firestore users/${userRecord.uid}`);
+        await schoolDb.collection("users").doc(userRecord.uid).set(userData);
         console.log("API: Firestore write successful");
 
         // 3. Return credentials (so Admin can see/copy them)

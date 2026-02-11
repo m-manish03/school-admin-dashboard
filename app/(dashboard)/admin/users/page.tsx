@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Users, UserPlus, FileSpreadsheet } from "lucide-react"
 import { UserCreationForm } from "@/components/users/user-creation-form"
 import { BulkUpload } from "@/components/users/bulk-upload"
+import { UserList } from "@/components/users/user-list"
 
 export default function UserManagementPage() {
     return (
@@ -13,8 +14,12 @@ export default function UserManagementPage() {
                 <h2 className="text-3xl font-bold tracking-tight">User Management</h2>
             </div>
 
-            <Tabs defaultValue="individual" className="space-y-4">
+            <Tabs defaultValue="list" className="space-y-4">
                 <TabsList>
+                    <TabsTrigger value="list" className="flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        All Users
+                    </TabsTrigger>
                     <TabsTrigger value="individual" className="flex items-center gap-2">
                         <UserPlus className="h-4 w-4" />
                         Individual Creation
@@ -24,6 +29,10 @@ export default function UserManagementPage() {
                         Bulk Upload
                     </TabsTrigger>
                 </TabsList>
+
+                <TabsContent value="list" className="space-y-4">
+                    <UserList />
+                </TabsContent>
 
                 <TabsContent value="individual" className="space-y-4">
                     <UserCreationForm />

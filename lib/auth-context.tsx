@@ -85,7 +85,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+      // Check role immediately
+      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        const role = userData.role?.toLowerCase()
+
+        // STRICTLY BLOCK Students and Teachers from Dashboard
+        if (role === "student" || role === "teacher") {
+          await signOut(auth)
+          return {
+            success: false,
+            error: "Access Denied: This dashboard is for Administrators only. Please use the School App."
+          }
+        }
+      }
+
       router.push("/")
       return { success: true }
     } catch (error: any) {
