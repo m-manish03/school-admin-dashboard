@@ -1,11 +1,22 @@
 "use client"
 
-import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { auth, db } from "./firebase"
+import {
+  onAuthStateChanged,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signOut,
+  updateProfile,
+  type User as FirebaseUser
+} from "firebase/auth"
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 
 interface User {
-  email: string
-  name: string
+  uid: string
+  email: string | null
+  name: string | null
   role: string
 }
 
@@ -14,17 +25,10 @@ interface AuthContextType {
   isLoading: boolean
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  logout: () => void
+  logout: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
-
-const STORAGE_KEY = "greenfield_auth"
-
-// Mock users database
-const MOCK_USERS: { email: string; password: string; name: string; role: string }[] = [
-  { email: "admin@greenfield.edu", password: "admin123", name: "Dr. Rajesh Kumar", role: "School Head" },
-]
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
@@ -33,15 +37,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pathname = usePathname()
 
   useEffect(() => {
-    const stored = sessionStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      try {
-        setUser(JSON.parse(stored))
-      } catch {
-        sessionStorage.removeItem(STORAGE_KEY)
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+          if (userDoc.exists()) {
+            const data = userDoc.data()
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: data.name || firebaseUser.displayName || "",
+              role: data.role || "teacher"
+            })
+          } else {
+            // Fallback for users without firestore doc (e.g. initial setup)
+            setUser({
+              uid: firebaseUser.uid,
+              email: firebaseUser.email,
+              name: firebaseUser.displayName || "",
+              role: "School Head" // Default role for safety if doc missing
+            })
+          }
+        } catch (error) {
+          console.error("Error fetching user profile:", error)
+          // Still set user even if profile fetch fails, to allow debugging or basic access
+          setUser({
+            uid: firebaseUser.uid,
+            email: firebaseUser.email,
+            name: firebaseUser.displayName || "",
+            role: "unknown"
+          })
+        }
+      } else {
+        setUser(null)
       }
-    }
-    setIsLoading(false)
+      setIsLoading(false)
+    })
+
+    return () => unsubscribe()
   }, [])
 
   useEffect(() => {
@@ -50,39 +83,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [user, isLoading, pathname, router])
 
-  const login = useCallback(async (email: string, password: string) => {
-    const found = MOCK_USERS.find((u) => u.email === email && u.password === password)
-    if (found) {
-      const userData = { email: found.email, name: found.name, role: found.role }
-      setUser(userData)
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify(userData))
+  const login = async (email: string, password: string) => {
+    try {
+      await signInWithEmailAndPassword(auth, email, password)
       router.push("/")
       return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
     }
-    return { success: false, error: "Invalid email or password" }
-  }, [router])
+  }
 
-  const register = useCallback(async (name: string, email: string, password: string) => {
-    if (MOCK_USERS.some((u) => u.email === email)) {
-      return { success: false, error: "Email already registered" }
-    }
-    if (password.length < 6) {
-      return { success: false, error: "Password must be at least 6 characters" }
-    }
-    const newUser = { email, password, name, role: "School Head" }
-    MOCK_USERS.push(newUser)
-    const userData = { email, name, role: "School Head" }
-    setUser(userData)
-    sessionStorage.setItem(STORAGE_KEY, JSON.stringify(userData))
-    router.push("/")
-    return { success: true }
-  }, [router])
+  const register = async (name: string, email: string, password: string) => {
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+      await updateProfile(userCredential.user, { displayName: name })
 
-  const logout = useCallback(() => {
-    setUser(null)
-    sessionStorage.removeItem(STORAGE_KEY)
-    router.push("/login")
-  }, [router])
+      // Create user document in Firestore
+      await setDoc(doc(db, "users", userCredential.user.uid), {
+        name,
+        email,
+        role: "School Head", // Default role for self-registration (Admin)
+        createdAt: serverTimestamp(),
+      })
+
+      router.push("/")
+      return { success: true }
+    } catch (error: any) {
+      return { success: false, error: error.message }
+    }
+  }
+
+  const logout = async () => {
+    try {
+      await signOut(auth)
+      router.push("/login")
+    } catch (error) {
+      console.error("Logout failed:", error)
+    }
+  }
 
   return (
     <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>

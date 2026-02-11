@@ -11,6 +11,7 @@ import {
   Activity,
   School,
   BrainCircuit,
+  UserCog,
 } from "lucide-react"
 import {
   Sidebar,
@@ -28,6 +29,7 @@ import {
 
 const navItems = [
   { title: "Overview", href: "/", icon: LayoutDashboard },
+  { title: "User Management", href: "/admin/users", icon: UserCog },
   { title: "Teachers", href: "/teachers", icon: Users },
   { title: "Students", href: "/students", icon: GraduationCap },
   { title: "Academics", href: "/academics", icon: BarChart3 },
